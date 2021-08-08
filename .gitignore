@@ -1,0 +1,7 @@
+/lib
+/package-lock.json
+/node_modules
+*.js
+!/config.example.js
+*~*
+*\#*
