@@ -1,13 +1,11 @@
 import Koa from 'koa';
-import subsonicMiddleware from './subsonic-middleware'
-import subsonicRouter from './subsonic-api'
-import getConfig from './config'
+import subsonicRouter from './subsonic-api.js'
+import getConfig from './config.js'
 
 const config = getConfig();
 
 const app = new Koa();
 
-app.use(subsonicMiddleware);
 app.use(subsonicRouter.routes());
 app.use(subsonicRouter.allowedMethods());
 

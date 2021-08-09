@@ -1,10 +1,11 @@
 import Koa from 'koa'
-import crypto from 'crypto'
-import getConfig from './config'
+import escapeHtml from 'html-escape'
+import { createHmac } from 'crypto'
+import getConfig from './config.js'
 
 const serverRestVersion = '1.8.0';
 
-enum SubsonicErrorCode {
+export enum SubsonicErrorCode {
     Generic = 0,
     RequiredParameterMissing = 10,
     IncompatibleClientVersion = 20,
@@ -19,13 +20,13 @@ enum SubsonicResponseFormat {
     Json,
 }
 
-class SubsonicError extends Error {
+export class SubsonicError extends Error {
+    code: SubsonicErrorCode;
+
     constructor(message: string, code: SubsonicErrorCode) {
 	super(message);
 	this.code = code;
     }
-
-    code: SubsonicErrorCode;
 }
 
 function renderXml(body: object): string {
@@ -40,50 +41,60 @@ function renderXml(body: object): string {
 	    if (value instanceof Array) {
 		value.forEach(v => children.push({ name: key, value: v }));
 	    } else if (typeof value === 'object') {
-		children.push(value);
+		children.push({ name: key, value });
 	    } else {
 		attrs[key] = String(value);
 	    }
 	})
 
-	if (rootName && children.length > 0) {
+	if (!rootName && Object.keys(attrs).length > 0) {
 	    throw new Error('No attributes allowed on fake root XML element');
 	}
 
 	const attrsString: string = Object.keys(attrs).map(key => {
 	    const value = attrs[key];
-	    return `${key}="${value}"`;
+	    return `${key}="${escapeHtml(value)}"`;
 	}).join(' ');
-	if (children.length === 0) {
+
+	if (children.length === 0 && rootName) {
 	    return `<${rootName} ${attrsString}/>`;
 	}
 	
 	const childrenString: string = children.map(({ name, value }) => renderXmlHelper(value, name)).join('\n');
 
-	return `<${rootName} ${attrsString}>
+	return rootName
+	    ? `<${rootName} ${attrsString}>
 ${childrenString}
-</${rootName}>`;
+</${rootName}>`
+	    : childrenString;
     }
 
     return '<?xml version="1.0" encoding="UTF-8"?>\n' + renderXmlHelper(body);
 }
 
-function renderResponse(format: SubsonicResponseFormat, body: object): string {
-    switch (format) {
+function renderResponse(ctx: Koa.Context, body: object): void {
+    switch (ctx.subsonicRequest.format) {
 	case SubsonicResponseFormat.Xml:
-	    return renderXml(body);
+	    ctx.response.type = 'xml'
+	    ctx.response.body = renderXml(body);
+	    break;
 	case SubsonicResponseFormat.Json:
-	    return JSON.stringify(body)
+	    ctx.response.type = 'json'
+	    ctx.response.body = JSON.stringify(body)
+	    break;
     }
 }
 
-function renderError(format: SubsonicResponseFormat, error: SubsonicError): string {
-    return renderResponse(
-	format,
+function renderError(ctx: Koa.Context, error: SubsonicError): void {
+    ctx.response.status = 400;
+    renderResponse(
+	ctx,
 	{
 	    'subsonic-response': {
+		// TODO: no xmlns for json
 		xmlns: 'http://subsonic.org/restapi',
 		status: 'failed',
+		type: 'gazelle-subsonic',
 		version: serverRestVersion,
 		error: {
 		    code: error.code,
@@ -93,22 +104,23 @@ function renderError(format: SubsonicResponseFormat, error: SubsonicError): stri
 	});
 }
 
-function renderOk(format: SubsonicResponseFormat, body: object): string {
-    return renderResponse(
-	format,
+function renderOk(ctx: Koa.Context): void {
+    renderResponse(
+	ctx,
 	{
 	    'subsonic-response': {
 		xmlns: 'https://subsonic.org/restapi',
-		status: 'failed',
+		status: 'ok',
+		type: 'gazelle-subsonic',
 		version: serverRestVersion,
-		...body,
+		...ctx.subsonicResponse,
 	    }
 	}
     )
 }
 
 // TODO ts
-export default async function subsonicMiddleware(ctx: Koa.Context, next: Koa.Next) {
+export async function subsonicMiddleware(ctx: Koa.Context, next: Koa.Next) {
     ctx.subsonicRequest = {
 	format: SubsonicResponseFormat.Xml,
     }
@@ -122,6 +134,10 @@ export default async function subsonicMiddleware(ctx: Koa.Context, next: Koa.Nex
 	    case 'json':
 		ctx.subsonicRequest.format = SubsonicResponseFormat.Json;
 		break;
+	    case undefined:
+		break;
+	    default:
+		throw new SubsonicError('Unknown/unsupported format', SubsonicErrorCode.Generic);
 	}
 
 	if (!query.v) {
@@ -133,7 +149,10 @@ export default async function subsonicMiddleware(ctx: Koa.Context, next: Koa.Nex
 	if (!query.u) {
 	    throw new SubsonicError('Missing u parameter', SubsonicErrorCode.RequiredParameterMissing);
 	}
-	if (query.v.length || query.c.length || query.u.length || (query.p && query.p.length)) {
+	if (query.v instanceof Array
+	    || query.c instanceof Array
+	    || query.u instanceof Array
+	    || (query.p && query.p instanceof Array)) {
 	    throw new SubsonicError('Duplicate single-letter parameters', SubsonicErrorCode.RequiredParameterMissing);
 	}
 	ctx.subsonicRequest.version = query.v;
@@ -157,12 +176,12 @@ export default async function subsonicMiddleware(ctx: Koa.Context, next: Koa.Nex
 	    if (!(query.t && query.s)) {
 		throw new SubsonicError('Missing sufficient password parameters', SubsonicErrorCode.RequiredParameterMissing);
 	    }
-	    if (query.t.length || query.s.length) {
+	    if (query.t instanceof Array || query.s instanceof Array) {
 		throw new SubsonicError('Duplicate single-letter parameters', SubsonicErrorCode.RequiredParameterMissing);
 	    }
 
 	    const clientHash = query.t as string;
-	    const serverHash = crypto.createHmac('md5', serverPassword + query.s).digest('hex');
+	    const serverHash = createHmac('md5', serverPassword + query.s).digest('hex');
 	    if (serverHash !== clientHash) {
 		throw authError;
 	    }
@@ -172,16 +191,21 @@ export default async function subsonicMiddleware(ctx: Koa.Context, next: Koa.Nex
 	// if we made it here, authentication was successful.
 	await next();
 
-	if (!ctx.subsonicResponse) {
-	    throw new SubsonicError('empty response', SubsonicErrorCode.Generic);
+	// suppress our output handling
+	if (ctx.subsonicResponse === false) {
+	    return;
 	}
-	ctx.response.status = 200;
-	ctx.response.body = renderOk(ctx.subsonicRequest.format, ctx.subsonicResponse);
+
+	if (ctx.subsonicResponse) {
+	    renderOk(ctx)
+	} else {
+	    ctx.response.status = 404;
+	    ctx.body = 'Not found/not implemented'
+	}
     } catch (e) {
 	if (!(e instanceof SubsonicError)) {
 	    e = new SubsonicError(e.message, SubsonicErrorCode.Generic);
 	}
-	ctx.response.status = 400; // TODO
-	ctx.response.body = renderError(ctx.subsonicRequest.format, e);
+	renderError(ctx, e);
     }
 }

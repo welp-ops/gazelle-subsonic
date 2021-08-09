@@ -1,5 +1,4 @@
-export default
-{
+({
     // gazelle API settings:
     "gazelle": {
 	"baseUrl": "https://orpheus.network", // no trailing slash
@@ -22,5 +21,8 @@ export default
     "server": {
 	"bindIp": "127.0.0.1", // change to 0.0.0.0 if accessing over the network
 	"port": 2773,
+    },
+    "users": {
+	"welp": "password"
     }
-}
+})
