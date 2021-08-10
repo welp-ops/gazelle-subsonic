@@ -8,7 +8,7 @@ namespace Config {
     interface Gazelle {
 	baseUrl: string, // NO trailing slash
 	authToken: string,
-	announceKey: string,
+	passkey: string,
 	// TODO: add a cache exprie, and add wikiImage to browse and artist results
     }
 

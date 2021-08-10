@@ -241,11 +241,11 @@ async function gazelleApiQuery(action: string, otherProps: object): Promise<obje
 		       {
 	    json: true,
 	    headers: {
-		Authorization: getConfig().gazelle.authToken,
+		authorization: getConfig().gazelle.authToken,
 	    }
 	});
     if (response.body.status !== 'success') {
-	throw new Error('Gazelle API returned "status: failure"');
+	throw new Error(`Gazelle API returned "status: failure" with message "${response.body.error}"`);
     }
 
     return response.body.response;
@@ -269,7 +269,7 @@ export async function groupSearch(term: string,
 
 export async function groupGet(groupId: number): Promise<Gazelle.Group> {
 
-    const response = await gazelleApiQuery('torrent', { id: groupId }) as Wire.TorrentGroupResult;
+    const response = await gazelleApiQuery('torrentgroup', { id: groupId }) as Wire.TorrentGroupResult;
     return parseTorrentGroupResult(response);
 }
 

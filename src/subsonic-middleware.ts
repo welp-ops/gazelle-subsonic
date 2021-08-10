@@ -204,6 +204,8 @@ export async function subsonicMiddleware(ctx: Koa.Context, next: Koa.Next) {
 	}
     } catch (e) {
 	if (!(e instanceof SubsonicError)) {
+	    console.error('Subsonic middleware is handling an unknown error:')
+	    console.error(e)
 	    e = new SubsonicError(e.message, SubsonicErrorCode.Generic);
 	}
 	renderError(ctx, e);

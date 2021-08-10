@@ -155,7 +155,12 @@ async function stream(ctx: Koa.Context) {
     }
     ctx.response.length = file.length;
     ctx.subsonicResponse = false;
-    ctx.body = file.createReadStream();
+    const stream = file.createReadStream();
+    // HACK
+    if (!(file as any).done) {
+	(file as any)._torrent.done = false;
+    }
+    ctx.body = stream;
 }
 
 defineEndpoint('stream', streamQuerySchema, stream);
