@@ -67,6 +67,13 @@ namespace SubSerial {
 	album?: Array<Album>,
     }
 
+    // search2 and search3
+    export type SearchResult = {
+	album: Album[],
+	song: Song[],
+	artist: Artist[],
+    }
+
     export type StandaloneArtist = { artist: Artist }
 
     // directories seem to have parent ids usually?
@@ -75,6 +82,9 @@ namespace SubSerial {
 
     export type StandaloneAlbumList = { albumList: { album: Album[] }}
     export type StandaloneAlbumList2 = { albumList2: { album: Album[] }}
+
+    export type StandaloneSearch2 = { search2: SearchResult }
+    export type StandaloneSearch3 = { search3: SearchResult }
 }
 
 // technical information about a song that can be gotten from just the gazelle song
@@ -382,7 +392,45 @@ defineEndpoint('getAlbumList2', getAlbumListQuerySchema, async ctx => {
     ctx.subsonicResponse = response;
 })
 
-defineEndpoint('getCoverArt', emptySchema, async ctx => {
+const search2QuerySchema = Joi.object({
+    query: Joi.string().required(),
+    artistCount: Joi.number(),
+    artistOffset: Joi.number(),
+    albumCount: Joi.number(),
+    albumOffset: Joi.number(),
+    songCount: Joi.number(),
+    songOffset: Joi.number(),
+})
+async function search2(ctx: Koa.Context): Promise<SubSerial.SearchResult> {
+    return {
+	// TODO: customizable order
+	album: (await groupSearchPaged({ term: ctx.query.query as string, orderBy: 'seeders' },
+				       parseInt(ctx.query.albumCount as string) || 20,
+				       parseInt(ctx.query.albumOffset as string) || 0))
+		   .map(parseGroupLite),
+	song: [],
+	artist: [],
+    }
+}
+
+defineEndpoint('search2', search2QuerySchema, async ctx => {
+    const response: SubSerial.StandaloneSearch2 = {
+	search2: await search2(ctx),
+    }
+    ctx.subsonicResponse = response;
+});
+defineEndpoint('search3', search2QuerySchema, async ctx => {
+    const response: SubSerial.StandaloneSearch3 = {
+	search3: await search2(ctx),
+    }
+    ctx.subsonicResponse = response;
+});
+
+const getCoverArtQuerySchema = Joi.object({
+    id: coverIdSchema,
+})
+defineEndpoint('getCoverArt', getCoverArtQuerySchema, async ctx => {
+    // TODO: figure out a better way to do cover art
 
 })
 

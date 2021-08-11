@@ -1,4 +1,5 @@
 import Koa from 'koa'
+import Joi from 'joi'
 import { escape } from 'html-escaper'
 import { createHmac } from 'crypto'
 import getConfig from './config.js'
@@ -119,7 +120,18 @@ function renderOk(ctx: Koa.Context): void {
     )
 }
 
-// TODO ts
+const singleLetterParamsSchema = Joi.object({
+    f: Joi.string().equal('xml', 'json', 'jsonp'),
+    v: Joi.string().regex(/\d+\.\d+\.\d+/).required(),
+    c: Joi.string().required(),
+    u: Joi.string().required(),
+    p: Joi.string(),
+    t: Joi.string().regex(/^[a-fA-F0-9]{32}$/),
+    s: Joi.string(),
+})
+    .and('s', 't')
+    .xor('p', 't')
+
 export async function subsonicMiddleware(ctx: Koa.Context, next: Koa.Next) {
     ctx.subsonicRequest = {
 	format: SubsonicResponseFormat.Xml,
@@ -127,6 +139,10 @@ export async function subsonicMiddleware(ctx: Koa.Context, next: Koa.Next) {
 
     try {
 	const query: NodeJS.Dict<string | string[]> = ctx.request.query;
+	const validateError = singleLetterParamsSchema.validate(query, { allowUnknown: true }).error;
+	if (validateError) {
+	    throw new SubsonicError(validateError.message, SubsonicErrorCode.RequiredParameterMissing)
+	}
 	switch (query.f) {
 	    case 'xml':
 		ctx.subsonicRequest.format = SubsonicResponseFormat.Xml;
@@ -138,22 +154,6 @@ export async function subsonicMiddleware(ctx: Koa.Context, next: Koa.Next) {
 		break;
 	    default:
 		throw new SubsonicError('Unknown/unsupported format', SubsonicErrorCode.Generic);
-	}
-
-	if (!query.v) {
-	    throw new SubsonicError('Missing v parameter', SubsonicErrorCode.RequiredParameterMissing);
-	}
-	if (!query.c) {
-	    throw new SubsonicError('Missing c parameter', SubsonicErrorCode.RequiredParameterMissing);
-	}
-	if (!query.u) {
-	    throw new SubsonicError('Missing u parameter', SubsonicErrorCode.RequiredParameterMissing);
-	}
-	if (query.v instanceof Array
-	    || query.c instanceof Array
-	    || query.u instanceof Array
-	    || (query.p && query.p instanceof Array)) {
-	    throw new SubsonicError('Duplicate single-letter parameters', SubsonicErrorCode.RequiredParameterMissing);
 	}
 	ctx.subsonicRequest.version = query.v;
 	ctx.subsonicRequest.client = query.c
@@ -173,16 +173,9 @@ export async function subsonicMiddleware(ctx: Koa.Context, next: Koa.Next) {
 		throw authError;
 	    }
 	} else {
-	    if (!(query.t && query.s)) {
-		throw new SubsonicError('Missing sufficient password parameters', SubsonicErrorCode.RequiredParameterMissing);
-	    }
-	    if (query.t instanceof Array || query.s instanceof Array) {
-		throw new SubsonicError('Duplicate single-letter parameters', SubsonicErrorCode.RequiredParameterMissing);
-	    }
-
 	    const clientHash = query.t as string;
 	    const serverHash = createHmac('md5', serverPassword + query.s).digest('hex');
-	    if (serverHash !== clientHash) {
+	    if (serverHash.toLowerCase() !== clientHash.toLowerCase()) {
 		throw authError;
 	    }
 	}
