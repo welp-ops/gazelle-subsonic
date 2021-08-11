@@ -59,7 +59,7 @@ namespace SubSerial {
 
     export type Album = {
 	id: string,
-	name: string,
+	title: string,
 	coverArt: string,
 	songCount?: number,
 	duration?: number,
@@ -206,7 +206,7 @@ function parseSongsTechnical(codec: Gazelle.Codec, files: Gazelle.File[])
 function parseGroupLite(group: Gazelle.GroupLite): SubSerial.Album {
     return {
 	id: serializeGroupId(group.id),
-	name: group.name,
+	title: group.name,
 	coverArt: serializeCoverId(group.id),
 	artist: group.artist.name,
 	artistId: serializeArtistId(group.artist.id),
@@ -299,7 +299,7 @@ async function getAlbum(id: GroupId): Promise<{ album: SubSerial.Album, songs: S
     return {
 	album: {
 	    id: groupId,
-	    name: group.name,
+	    title: group.name,
 	    coverArt: coverId,
 	    songCount: group.torrent.files.length,
 	    duration: 1234,
@@ -371,7 +371,7 @@ async function getArtist(id: ArtistId): Promise<{ artist: SubSerial.Artist, albu
 	},
 	albums: artist.groups.map(group => ({
 	    id: serializeGroupId(group.id),
-	    name: group.name,
+	    title: group.name,
 	    coverArt: 'TODO',
 	    artist: artist.name,
 	    artistId,
@@ -426,14 +426,11 @@ defineEndpoint('getMusicDirectory', getMusicDirectoryQuerySchema, async ctx => {
 
 const getAlbumListQuerySchema = Joi.object({
     type: Joi.string().equal('random', 'newest', 'highest', 'frequent', 'recent', 'alphabeticalByName', 'alphabeticalByArtist', 'starred', 'byYear', 'byGenre').required(),
-    size: Joi.number().max(250),
+    size: Joi.number().max(500),
     offset: Joi.number(),
-    fromYear: Joi.number()
-	.when('type', {is: Joi.equal('byYear'), then: Joi.required(), otherwise: Joi.forbidden()}),
-    toYear: Joi.number()
-	.when('type', {is: Joi.equal('byYear'), then: Joi.required(), otherwise: Joi.forbidden()}),
-    genre: Joi.string()
-	.when('type', {is: Joi.equal('genre'), then: Joi.required(), otherwise: Joi.forbidden()}),
+    fromYear: Joi.number(),
+    toYear: Joi.number(),
+    genre: Joi.string(),
 })
 
 async function getAlbumList(ctx: Koa.Context): Promise<SubSerial.Album[]> {
@@ -469,7 +466,8 @@ async function getAlbumList(ctx: Koa.Context): Promise<SubSerial.Album[]> {
 	    break;
     }
 
-    const size = ctx.query.size ? parseInt(ctx.query.size as string) : 10;
+    // TODO: customizable size limit
+    const size = ctx.query.size ? Math.min(50, parseInt(ctx.query.size as string)) : 10;
     const offset = ctx.query.offset ? parseInt(ctx.query.offset as string) : 0;
     const searchResult = await groupSearchPaged(opts, size, offset);
     return searchResult.map(parseGroupLite);

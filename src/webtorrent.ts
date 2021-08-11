@@ -38,6 +38,8 @@ function ensureTorrent(torrentId: number): Promise<WebTorrent.Torrent> {
 	const torrentFileUrl = `${getConfig().gazelle.baseUrl}/torrents.php?action=download&id=${torrentId}&torrent_pass=${getConfig().gazelle.passkey}`;
 	// TODO: store opts
 	const torrent = wtClient.add(torrentFileUrl)
+	// TODO: it's still possible for duplicate torrents to be added? sometimes wtClient.add
+	// throws an error due to bad bencode syntax but the torrent is indeed already added??
 	torrents[torrentId] = torrent;
 	// TODO: there's a slight possibility of a race condition here, if the torrent is added to torrents but the metadata event has not fired yet, then the second client will start streaming the file and then the deselect call will occur, which will deselct the file? (unless the selection due to create)
 	torrent.once('ready', () => {
