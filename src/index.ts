@@ -10,5 +10,5 @@ app.use(subsonicRouter.routes());
 app.use(subsonicRouter.allowedMethods());
 
 app.listen(config.server.port, config.server.bindIp, () => {
-    console.log('Gazelle-subsonic is running.');
+	console.log('Gazelle-subsonic is running.');
 });
