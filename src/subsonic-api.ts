@@ -96,6 +96,17 @@ namespace SubSerial {
 
     export type StandaloneSearch2 = { search2: SearchResult }
     export type StandaloneSearch3 = { search3: SearchResult }
+
+    export type StandaloneMusicFolders = {
+	musicFolders: {
+	    musicFolder: [
+		{
+		    id: string,
+		    name: string,
+		}
+	    ]
+	}
+    }
 }
 
 // technical information about a song that can be gotten from just the gazelle songs
@@ -411,7 +422,7 @@ defineEndpoint('getMusicDirectory', getMusicDirectoryQuerySchema, async ctx => {
 	    }
 	};
 	ctx.subsonicResponse = result;
-    } else {
+    } else if (!artistIdSchema.validate(ctx.query.id).error){
 	// artist
 	const artist = await getArtist(parseArtistId(ctx.query.id as string))
 	const result: SubSerial.StandaloneDirectoryArtist = {
@@ -541,6 +552,21 @@ defineEndpoint('getCoverArt', getCoverArtQuerySchema, async ctx => {
     ctx.response.type = getConfig().subsonic.defaultCoverArtType
     ctx.response.body = fs.createReadStream(getConfig().subsonic.defaultCoverArt)
     ctx.subsonicResponse = false;
+})
+
+defineEndpoint('getMusicFolders', emptySchema, async ctx => {
+    const response: SubSerial.StandaloneMusicFolders = {
+	musicFolders: {
+	    musicFolder: [
+		{
+		    id: 'rootMusicFolder',
+		    name: 'Music',
+		}
+	    ]
+	}
+
+    }
+    ctx.subsonicResponse = response
 })
 
 // yes, these have to go at the bottom
