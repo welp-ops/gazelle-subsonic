@@ -1,4 +1,5 @@
 import needle from 'needle';
+import { unescape } from 'html-escaper'
 import makeDebug from 'debug'
 const debug = makeDebug('gazelle-subsonic:gazelle-api')
 
@@ -233,7 +234,7 @@ function parseFileList(wireFileList: string): Gazelle.File[] {
 	.map(file => {
 	    const [, fileName, fileSize] = file.match(/(.+){{{(\d+)}}}/);
 	    return {
-		name: fileName,
+		name: unescape(fileName),
 		size: parseInt(fileSize),
 	    }
 	})

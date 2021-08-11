@@ -1,5 +1,5 @@
 import Koa from 'koa'
-import escapeHtml from 'html-escape'
+import { escape } from 'html-escaper'
 import { createHmac } from 'crypto'
 import getConfig from './config.js'
 
@@ -53,7 +53,7 @@ function renderXml(body: object): string {
 
 	const attrsString: string = Object.keys(attrs).map(key => {
 	    const value = attrs[key];
-	    return `${key}="${escapeHtml(value)}"`;
+	    return `${key}="${escape(value)}"`;
 	}).join(' ');
 
 	if (children.length === 0 && rootName) {

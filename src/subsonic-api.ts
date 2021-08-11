@@ -142,7 +142,7 @@ function parseSongsTechnical(codec: Gazelle.Codec, files: Gazelle.File[])
 : Array<{ technical: SerialSongTechnical, original: Gazelle.File }> {
     // excludes extension
     function pathFileName(path: string): string {
-	return path.slice(path.lastIndexOf('/'), path.lastIndexOf('.'))
+	return path.substring(path.lastIndexOf('/'), path.lastIndexOf('.'))
     }
 
     // find a common prefix to all the song names, taking into account that each song may have a
@@ -154,10 +154,12 @@ function parseSongsTechnical(codec: Gazelle.Codec, files: Gazelle.File[])
 	    const fileName = pathFileName(files[i].name)
 	    let newCommonPrefix = ''
 	    for (let k = 0; k < fileName.length && k < commonPrefix.length; k++) {
-		if (fileName[k] !== commonPrefix[k]) {
+		// possible enhancement: allow variable-length numbers in the common prefix
+		if (fileName[k] === commonPrefix[k] || (/\d/.test(fileName[k]) && /\d/.test(commonPrefix[k]))) {
+		    newCommonPrefix += fileName[k]
+		} else {
 		    break
 		}
-		newCommonPrefix += fileName[k]
 	    }
 	    commonPrefix = newCommonPrefix
 	}
