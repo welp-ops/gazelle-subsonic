@@ -1,4 +1,4 @@
-import { Format } from './gazelle.js'
+import { Gazelle } from './gazelle.js'
 import { readFileSync } from 'fs'
 
 //** TYPES
@@ -10,13 +10,14 @@ namespace Config {
 	authToken: string,
 	passkey: string,
 	// TODO: add a cache exprie, and add wikiImage to browse and artist results
+	searchPageSize: number,
     }
 
     type TorrentSelectionOrderBy = 'seeders' | 'format' | 'year' | 'numTracks';
 
     interface TorrentSelection {
 	sortOrder: Array<TorrentSelectionOrderBy>;
-	formats: Array<Format>,
+	formats: Array<Gazelle.Format>,
 	seeders: number | true, // if number, any torrent with at least that many seeders is considered equivalently good. If true, always maximize seeders.
 	preferNewEditions: boolean, // If true, prefer newer torrents, else, prefer older ones.
     }

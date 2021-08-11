@@ -1,5 +1,7 @@
 import WebTorrent from 'webtorrent'
 import getConfig from './config.js'
+import makeDebug from 'debug'
+const debug = makeDebug('gazelle-subsonic:webtorrent')
 
 const webTorrentOptions: any = {
     dht: false,
@@ -39,9 +41,21 @@ function ensureTorrent(torrentId: number): Promise<WebTorrent.Torrent> {
 	torrent.once('ready', () => {
 	    // https://github.com/webtorrent/webtorrent/issues/164#issuecomment-248395202
 	    torrent.deselect(0, torrent.pieces.length - 1, 0)
+	    debug(`Torrent ${torrent.name} is ready`)
 	    resolve(torrent)
 	})
-	torrent.on('error', e => reject(e))
+	torrent.on('warning', e => {
+	    console.error(`Torrent ${torrent.name} warning:`)
+	    console.error(e)
+	})
+	torrent.on('error', e => {
+	    console.error(`Torrent ${torrent.name} error:`);
+	    console.error(e)
+	    reject(e);
+	})
+	torrent.on('done', () => debug(`Done torrent: ${torrent.name}`))
+	torrent.on('wire', (_, addr) =>
+	    debug(`Peer ${addr} for  ${torrent.name}`))
     });
 }
 
@@ -50,10 +64,10 @@ function ensureTorrent(torrentId: number): Promise<WebTorrent.Torrent> {
 //     return collator.compare(a.path, b.path);
 // }
 
-export async function getTorrentFile(torrentId: number, fileId: number): Promise<WebTorrent.TorrentFile> {
+export async function getTorrentFile(torrentId: number, fileId: number, predicate: (arg0: string) => any): Promise<WebTorrent.TorrentFile> {
     const torrent = await ensureTorrent(torrentId);
     // TODO: helper function for this filtering.
-    const relevantFiles = torrent.files.filter(file => /\.(mp3|flac|aac)$/i.test(file.name));
+    const relevantFiles = torrent.files.filter(file => predicate(file.name));
     if (fileId >= relevantFiles.length) {
 	throw new TorrentFileNotFoundError();
     }

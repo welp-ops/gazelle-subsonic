@@ -3,7 +3,7 @@ import Koa from 'koa'
 import Joi from 'joi'
 
 import { subsonicMiddleware, SubsonicError, SubsonicErrorCode } from './subsonic-middleware.js'
-import { groupGet } from './gazelle.js'
+import { groupGet, groupSearchPaged, songNamePredicate, codecEstimatedBitRate, codecContentType, BrowseOptions, Gazelle } from './gazelle.js'
 import { getTorrentFile, TorrentFileNotFoundError } from './webtorrent.js'
 
 const allRouter = new Router({ prefix: '/rest' });
@@ -72,11 +72,25 @@ namespace SubSerial {
     // directories seem to have parent ids usually?
     export type StandaloneDirectoryAlbum = { directory: Album & { child: Song[] }}
     export type StandaloneDirectoryArtist = { directory: Artist & { child: Album[] }}
+
+    export type StandaloneAlbumList = { albumList: { album: Album[] }}
+    export type StandaloneAlbumList2 = { albumList2: { album: Album[] }}
+}
+
+// technical information about a song that can be gotten from just the gazelle song
+type SerialSongTechnical = {
+    title: string,
+    isDir: false,
+    isVideo: false,
+    duration: number,
+    bitRate: number,
+    size: number,
+    contentType: string,
 }
 
 //** FUNCTIONS
 
-export function parseSongId(songId: string): SongId {
+function parseSongId(songId: string): SongId {
     Joi.assert(songId, songIdSchema);
 
     const parts = songId.split('-');
@@ -87,30 +101,95 @@ export function parseSongId(songId: string): SongId {
     }
 }
 
-export function parseArtistId(artistId: string): ArtistId {
+function parseArtistId(artistId: string): ArtistId {
     Joi.assert(artistId, artistIdSchema)
 
     const parts = artistId.split('-');
     return parseInt(parts[1]);
 }
 
-export function parseGroupId(groupId: string): GroupId {
+function parseGroupId(groupId: string): GroupId {
     Joi.assert(groupId, groupIdSchema);
 
     const parts = groupId.split('-');
     return parseInt(parts[1]);
 }
 
-export function serializeSongId(songId: SongId): string {
+function parseCoverId(coverId: string): CoverId {
+    Joi.assert(coverId, coverIdSchema);
+
+    const parts = coverId.split('-');
+    return parseInt(parts[1]);
+}
+
+function serializeSongId(songId: SongId): string {
     return `song-${songId.groupId}-${songId.torrentId}-${songId.fileIndex}`
 }
 
-export function serializeArtistId(artistId: ArtistId): string {
+function serializeArtistId(artistId: ArtistId): string {
     return `artist-${artistId}`
 }
 
-export function serializeGroupId(groupId: GroupId): string {
+function serializeGroupId(groupId: GroupId): string {
     return `group-${groupId}`
+}
+
+function serializeCoverId(coverId: CoverId): string {
+    return `cover-${coverId}`
+}
+
+function parseSongsTechnical(codec: Gazelle.Codec, files: Gazelle.File[])
+: Array<{ technical: SerialSongTechnical, original: Gazelle.File }> {
+    // excludes extension
+    function pathFileName(path: string): string {
+	return path.slice(path.lastIndexOf('/'), path.lastIndexOf('.'))
+    }
+
+    // find a common prefix to all the song names, taking into account that each song may have a
+    // different number in its name
+    let commonPrefix: string = '';
+    if (files.length > 1) {
+	commonPrefix = pathFileName(files[0].name)
+	for (let i = 1; i < files.length; i++) {
+	    const fileName = pathFileName(files[i].name)
+	    let newCommonPrefix = ''
+	    for (let k = 0; k < fileName.length && k < commonPrefix.length; k++) {
+		if (fileName[k] !== commonPrefix[k]) {
+		    break
+		}
+		newCommonPrefix += fileName[k]
+	    }
+	    commonPrefix = newCommonPrefix
+	}
+    }
+
+    return files.map(file => ({
+	technical: {
+	    title: pathFileName(file.name).slice(commonPrefix.length),
+	    size: file.size,
+	    bitRate: codecEstimatedBitRate(codec),
+	    // round to nearest 30 seconds so it isn't sus
+	    duration: Math.max(30, Math.round(file.size*8 / codecEstimatedBitRate(codec) / 30) * 30),
+	    contentType: codecContentType(codec),
+	    isDir: false,
+	    isVideo: false,
+	},
+	original: file,
+    }))
+}
+
+function parseGroupLite(group: Gazelle.GroupLite): SubSerial.Album {
+    return {
+	id: serializeGroupId(group.id),
+	name: group.name,
+	coverArt: serializeCoverId(group.id),
+	songCount: 42,
+	duration: 1234,
+	artist: group.artist.name,
+	artistId: serializeArtistId(group.artist.id),
+	parent: serializeArtistId(group.artist.id),
+	isDir: true,
+    }
 }
 
 function makeJoiMiddleware(schema: Joi.ObjectSchema) {
@@ -131,6 +210,8 @@ function defineEndpoint(endpoint: string, schema: Joi.ObjectSchema, handler: (ct
     apiRouter.get(`/${endpoint}.view`, joiMiddleware, handler);
 }
 
+//** ENDPOINTS
+
 const emptySchema = Joi.object({});
 
 defineEndpoint('ping', emptySchema, ctx => ctx.subsonicResponse = {});
@@ -147,12 +228,9 @@ const streamQuerySchema = Joi.object({
 async function stream(ctx: Koa.Context) {
     const songId = parseSongId(ctx.query.id as string);
 
-    const file = await getTorrentFile(songId.torrentId, songId.fileIndex);
-    if (/\.(mp3|aac)$/i.test(file.name)) {
-	ctx.response.type = 'audio/mpeg';
-    } else if (/\.flac$/i.test(file.name)) {
-	ctx.response.type = 'audio/flac';
-    }
+    const file = await getTorrentFile(songId.torrentId, songId.fileIndex, songNamePredicate);
+    // TODO: somehow use the codic instead?
+    const contentType = songNamePredicate(file.name);
     ctx.response.length = file.length;
     ctx.subsonicResponse = false;
     const stream = file.createReadStream();
@@ -170,34 +248,29 @@ async function getAlbum(id: GroupId): Promise<{ album: SubSerial.Album, songs: S
     const group = await groupGet(id);
     const artistId = serializeArtistId(group.artist.id);
     const groupId = serializeGroupId(group.id)
+    const coverId = serializeCoverId(group.id)
 
     return {
 	album: {
 	    id: groupId,
 	    name: group.name,
-	    coverArt: 'TODO',
-	    songCount: group.torrent.songs.length,
+	    coverArt: coverId,
+	    songCount: group.torrent.files.length,
 	    duration: 1234,
-	    artist: group.artistName,
+	    artist: group.artist.name,
 	    artistId,
 	    parent: artistId,
 	    isDir: true,
 	},
-	songs: group.torrent.songs.map((song, i) => ({
+	songs: parseSongsTechnical(group.torrent.codec, group.torrent.files).map((song, i) => ({
+	    ...song.technical,
 	    id: serializeSongId({ groupId: group.id, torrentId: group.torrent.id, fileIndex: i }),
 	    parent: groupId,
 	    // TODO: clean up song names more
-	    title: song.name,
 	    album: groupId,
 	    artist: artistId,
-	    coverArt: 'TODO',
-	    duration: 1234,
-	    bitRate: 1234,
-	    size: song.size,
-	    contentType: 'TODO',
-	    path: `${group.artist.name}/${group.name}/${song.name.slice(song.name.lastIndexOf('/')+1)}`,
-	    isVideo: false,
-	    isDir: false,
+	    coverArt: coverId,
+	    path: `${group.artist.name}/${group.name}/${song.technical.title}`,
 	}))
     }
 }
@@ -239,6 +312,79 @@ defineEndpoint('getMusicDirectory', getMusicDirectoryQuerySchema, async ctx => {
     }
 })
 
+const getAlbumListQuerySchema = Joi.object({
+    type: Joi.string().equal('random', 'newest', 'highest', 'frequent', 'recent', 'alphabeticalByName', 'alphabeticalByArtist', 'starred', 'byYear', 'byGenre').required(),
+    size: Joi.number().max(250),
+    offset: Joi.number(),
+    fromYear: Joi.number()
+	.when('type', {is: Joi.equal('byYear'), then: Joi.required(), otherwise: Joi.forbidden()}),
+    toYear: Joi.number()
+	.when('type', {is: Joi.equal('byYear'), then: Joi.required(), otherwise: Joi.forbidden()}),
+    genre: Joi.string()
+	.when('type', {is: Joi.equal('genre'), then: Joi.required(), otherwise: Joi.forbidden()}),
+})
+
+async function getAlbumList(ctx: Koa.Context): Promise<SubSerial.Album[]> {
+    let opts: BrowseOptions = {
+	orderBy: 'seeders',
+    };
+
+    switch (ctx.query.type) {
+	case 'random':
+	    opts.orderBy = 'random';
+	    break;
+	case 'newest':
+	    opts.orderBy = 'year';
+	    break;
+	case 'highest': // TODO: implement rating
+	    opts.orderBy = 'snatched';
+	    break;
+	case 'frequent': // TODO: implement scrobbling
+	    opts.orderBy = 'seeders';
+	    break;
+	case 'recent':
+	    opts.orderBy = 'time';
+	    break;
+	case 'starred':
+	    opts.orderBy = 'snatched';
+	    break;
+	case 'year':
+	    opts.fromYear = parseInt(ctx.query.fromYear as string)
+	    opts.toYear = parseInt(ctx.query.toYear as string)
+	    break;
+	case 'genre':
+	    opts.tags = [(ctx.query.genre as string).replace(' ', '.')] // TODO: genre stuff in general
+	    break;
+    }
+
+    const size = ctx.query.size ? parseInt(ctx.query.size as string) : 10;
+    const offset = ctx.query.offset ? parseInt(ctx.query.offset as string) : 0;
+    const searchResult = await groupSearchPaged(opts, size, offset);
+    return searchResult.map(parseGroupLite);
+}
+
+defineEndpoint('getAlbumList', getAlbumListQuerySchema, async ctx => {
+    const response: SubSerial.StandaloneAlbumList = {
+	albumList: {
+	    album: await getAlbumList(ctx),
+	}
+    }
+    ctx.subsonicResponse = response;
+})
+defineEndpoint('getAlbumList2', getAlbumListQuerySchema, async ctx => {
+    const response: SubSerial.StandaloneAlbumList2 = {
+	albumList2: {
+	    album: await getAlbumList(ctx),
+	}
+    }
+    ctx.subsonicResponse = response;
+})
+
+defineEndpoint('getCoverArt', emptySchema, async ctx => {
+
+})
+
+// yes, these have to go at the bottom
 allRouter.use(apiRouter.routes());
 allRouter.use(apiRouter.allowedMethods());
 

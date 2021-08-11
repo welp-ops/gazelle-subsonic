@@ -4,6 +4,7 @@
 	"baseUrl": "https://orpheus.network", // no trailing slash
 	"authToken": "abcdefghijklmnovqrstuvwxyz1234567890", // generate an API token from user settings
 	"passkey": "abcdefghijklmnovqrstuvwxyz1234567890", // look in your download link URLs for this
+	"searchPageSize": 50,
     },
     // how to choose which torrent to leech from a group
     "torrentSelection": {
