@@ -2,12 +2,34 @@
 
 `gazelle-subsonic` transforms the Gazelle API into the Subsonic API.
 
+## Installation
+
+### From """binaries"""
+
+From the releases page, you can dowlnoad binaries for major platforms. Simply execute these on the
+command line to run them.
+
+### From source
+
+1. Install Git, Node.JS, and NPM.
+2. Clone this git repository.
+3. Navigate to the cloned directory in a terminal.
+4. Run `npm install` to install javascript dependencies to the current directory.
+5. Run `npm run build` to compile the typescript to javascript.
+6. Run `npm start` and gazelle-subsonic will be online!
+
+You can generate the binaries on the release page by running `npx pkg` (yes, `npx`, not `npm`)
+
+## Configuration
+
+Copy `config.example.js` to `config.js` and have it in the working directory where you run gazelle-subsonic.
+
 ## Subsonic API progress
 
 Legend:
 
 | Symbol  | Meaning                        |
-|---------+--------------------------------|
+|---------|--------------------------------|
 | ✓       | Reasonably implemented         |
 | ⃝        | Partially implemented          |
 | ❌      | Will not implement, mocked out |
@@ -16,7 +38,7 @@ Legend:
 Endpoints:
 
 | Endpoint            | Status | Notes                                                                             |
-|---------------------+--------+-----------------------------------------------------------------------------------|
+|---------------------|--------|-----------------------------------------------------------------------------------|
 | `ping`              | ✓      |                                                                                   |
 | `getLicense`        | ✓      |                                                                                   |
 | `getMusicFolders`   | ✓      | Trivial                                                                           |
