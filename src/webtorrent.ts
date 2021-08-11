@@ -3,6 +3,8 @@ import getConfig from './config.js'
 import makeDebug from 'debug'
 const debug = makeDebug('gazelle-subsonic:webtorrent')
 
+import { songNamePredicate, songNameComparator } from './util.js'
+
 const webTorrentOptions: any = {
     dht: false,
     lsd: false,
@@ -59,15 +61,12 @@ function ensureTorrent(torrentId: number): Promise<WebTorrent.Torrent> {
     });
 }
 
-// const collator = new Intl.Collator("en", { localeMatcher: 'lookup', usage: 'sort', sensitivity: 'variant' });
-// function fileComparator(a, b): number {
-//     return collator.compare(a.path, b.path);
-// }
-
-export async function getTorrentFile(torrentId: number, fileId: number, predicate: (arg0: string) => any): Promise<WebTorrent.TorrentFile> {
+export async function getTorrentFile(torrentId: number, fileId: number): Promise<WebTorrent.TorrentFile> {
     const torrent = await ensureTorrent(torrentId);
     // TODO: helper function for this filtering.
-    const relevantFiles = torrent.files.filter(file => predicate(file.name));
+    const relevantFiles = torrent.files
+	.filter(file => songNamePredicate(file.path))
+	.sort((a, b) => songNameComparator(a.path, b.path));
     if (fileId >= relevantFiles.length) {
 	throw new TorrentFileNotFoundError();
     }

@@ -3,10 +3,13 @@ import rangeParser from 'range-parser'
 import Koa from 'koa'
 import Joi from 'joi'
 import fs from 'fs'
+import makeDebug from 'debug'
+const debug = makeDebug('gazelle-subsonic:subsonic-api')
 
 import { subsonicMiddleware, SubsonicError, SubsonicErrorCode } from './subsonic-middleware.js'
-import { groupGet, groupSearchPaged, songNamePredicate, codecEstimatedBitRate, codecContentType, BrowseOptions, Gazelle } from './gazelle.js'
+import { groupGet, groupSearchPaged, artistGet, codecEstimatedBitRate, codecContentType, BrowseOptions, Gazelle } from './gazelle.js'
 import { getTorrentFile, TorrentFileNotFoundError } from './webtorrent.js'
+import { songNamePredicate } from './util.js'
 import getConfig from './config.js'
 
 const allRouter = new Router({ prefix: '/rest' });
@@ -38,7 +41,9 @@ namespace SubSerial {
 	parent: string,
 	title: string,
 	album: string,
+	albumId: string,
 	artist: string,
+	artistId: string,
 	isDir: false,
 	coverArt: string,
 	duration: number,
@@ -47,6 +52,7 @@ namespace SubSerial {
 	contentType: string,
 	isVideo: false,
 	path: string,
+	suffix: string,
     }
 
     export type StandaloneSong = { song: Song }
@@ -55,8 +61,8 @@ namespace SubSerial {
 	id: string,
 	name: string,
 	coverArt: string,
-	songCount: number,
-	duration: number,
+	songCount?: number,
+	duration?: number,
 	artist: string,
 	artistId: string,
 	parent: string, // same as artistId for us
@@ -65,12 +71,11 @@ namespace SubSerial {
 
     export type StandaloneAlbum = { album: Album & { song: Song[] } }
 
-    type Artist = {
+    export type Artist = {
 	id: string,
 	name: string,
 	coverArt: string,
 	albumCount: number,
-	album?: Array<Album>,
     }
 
     // search2 and search3
@@ -80,7 +85,7 @@ namespace SubSerial {
 	artist: Artist[],
     }
 
-    export type StandaloneArtist = { artist: Artist }
+    export type StandaloneArtist = { artist: Artist & { album: Album[] } }
 
     // directories seem to have parent ids usually?
     export type StandaloneDirectoryAlbum = { directory: Album & { child: Song[] }}
@@ -93,9 +98,10 @@ namespace SubSerial {
     export type StandaloneSearch3 = { search3: SearchResult }
 }
 
-// technical information about a song that can be gotten from just the gazelle song
+// technical information about a song that can be gotten from just the gazelle songs
 type SerialSongTechnical = {
     title: string,
+    suffix: string,
     isDir: false,
     isVideo: false,
     duration: number,
@@ -184,6 +190,7 @@ function parseSongsTechnical(codec: Gazelle.Codec, files: Gazelle.File[])
     return files.map(file => ({
 	technical: {
 	    title: pathFileName(file.name).slice(commonPrefix.length),
+	    suffix: file.name.slice(file.name.lastIndexOf('.')),
 	    size: file.size,
 	    bitRate: codecEstimatedBitRate(codec),
 	    // round to nearest 30 seconds so it isn't sus
@@ -201,8 +208,6 @@ function parseGroupLite(group: Gazelle.GroupLite): SubSerial.Album {
 	id: serializeGroupId(group.id),
 	name: group.name,
 	coverArt: serializeCoverId(group.id),
-	songCount: 42,
-	duration: 1234,
 	artist: group.artist.name,
 	artistId: serializeArtistId(group.artist.id),
 	parent: serializeArtistId(group.artist.id),
@@ -246,7 +251,8 @@ const streamQuerySchema = Joi.object({
 async function stream(ctx: Koa.Context) {
     const songId = parseSongId(ctx.query.id as string);
 
-    const file = await getTorrentFile(songId.torrentId, songId.fileIndex, songNamePredicate);
+    const file = await getTorrentFile(songId.torrentId, songId.fileIndex);
+    debug(`Streaming ${file.name}`)
     // TODO: somehow use the codec instead?
     ctx.response.type = songNamePredicate(file.name) || 'application/octet-stream';
 
@@ -283,6 +289,9 @@ defineEndpoint('download', streamQuerySchema, stream);
 
 async function getAlbum(id: GroupId): Promise<{ album: SubSerial.Album, songs: SubSerial.Song[]}> {
     const group = await groupGet(id);
+    if (!group) {
+	throw new SubsonicError('Album not found', SubsonicErrorCode.NotFound)
+    }
     const artistId = serializeArtistId(group.artist.id);
     const groupId = serializeGroupId(group.id)
     const coverId = serializeCoverId(group.id)
@@ -304,10 +313,12 @@ async function getAlbum(id: GroupId): Promise<{ album: SubSerial.Album, songs: S
 	    id: serializeSongId({ groupId: group.id, torrentId: group.torrent.id, fileIndex: i }),
 	    parent: groupId,
 	    // TODO: clean up song names more
-	    album: groupId,
-	    artist: artistId,
+	    album: group.name,
+	    albumId: groupId,
+	    artist: group.artist.name,
+	    artistId,
 	    coverArt: coverId,
-	    path: `${group.artist.name}/${group.name}/${song.technical.title}`,
+	    path: `${group.artist.name}/${group.name}/${song.technical.title + song.technical.suffix}`,
 	}))
     }
 }
@@ -325,6 +336,63 @@ defineEndpoint('getAlbum', getAlbumQuerySchema, async ctx => {
 	}
     }
     ctx.subsonicResponse = response;
+})
+
+const getSongQuerySchema = Joi.object({
+    id: songIdSchema.required(),
+})
+defineEndpoint('getSong', getSongQuerySchema, async ctx => {
+
+    const { groupId } = parseSongId(ctx.query.id as string)
+    const album = await getAlbum(groupId)
+    const songs = album.songs.filter(song => song.id === ctx.query.id)
+    if (songs.length !== 1) {
+	throw new SubsonicError('Song not found', SubsonicErrorCode.NotFound)
+    }
+    const response: SubSerial.StandaloneSong = {
+	song: songs[0],
+    }
+    ctx.subsonicResponse = response
+})
+
+async function getArtist(id: ArtistId): Promise<{ artist: SubSerial.Artist, albums: SubSerial.Album[] }> {
+    const artist = await artistGet(id)
+    if (!artist) {
+	throw new SubsonicError('Artist not found', SubsonicErrorCode.NotFound)
+    }
+    const artistId = serializeArtistId(artist.id);
+
+    return {
+	artist: {
+	    id: artistId,
+	    name: artist.name,
+	    coverArt: 'TODO',
+	    albumCount: artist.groups.length,
+	},
+	albums: artist.groups.map(group => ({
+	    id: serializeGroupId(group.id),
+	    name: group.name,
+	    coverArt: 'TODO',
+	    artist: artist.name,
+	    artistId,
+	    parent: artistId,
+	    isDir: true,
+	})),
+    }
+}
+
+const getArtistQuerySchema = Joi.object({
+    id: artistIdSchema.required(),
+})
+defineEndpoint('getArtist', getArtistQuerySchema, async ctx => {
+    const artist = await getArtist(parseArtistId(ctx.query.id as string))
+    const response: SubSerial.StandaloneArtist = {
+	artist: {
+	    ...artist.artist,
+	    album: artist.albums,
+	}
+    }
+    ctx.subsonicResponse = response
 })
 
 const getMusicDirectoryQuerySchema = Joi.object({
@@ -345,7 +413,14 @@ defineEndpoint('getMusicDirectory', getMusicDirectoryQuerySchema, async ctx => {
 	ctx.subsonicResponse = result;
     } else {
 	// artist
-	// TODO
+	const artist = await getArtist(parseArtistId(ctx.query.id as string))
+	const result: SubSerial.StandaloneDirectoryArtist = {
+	    directory: {
+		...artist.artist,
+		child: artist.albums,
+	    }
+	}
+	ctx.subsonicResponse = result
     }
 })
 
@@ -427,6 +502,14 @@ const search2QuerySchema = Joi.object({
     songOffset: Joi.number(),
 })
 async function search2(ctx: Koa.Context): Promise<SubSerial.SearchResult> {
+    // TODO: configure this, prevent autocomplete queries from hitting the rate limit
+    if ((ctx.query.query as string).slice(-1) === '*') {
+	return {
+	    album: [],
+	    song: [],
+	    artist: [],
+	}
+    }
     return {
 	// TODO: customizable order
 	album: (await groupSearchPaged({ term: ctx.query.query as string, orderBy: 'seeders' },

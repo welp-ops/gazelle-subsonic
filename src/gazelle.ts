@@ -4,6 +4,7 @@ import makeDebug from 'debug'
 const debug = makeDebug('gazelle-subsonic:gazelle-api')
 
 import getConfig from './config.js';
+import { songNamePredicate, songNameComparator } from './util.js'
 
 //** TYPES
 
@@ -161,7 +162,7 @@ export namespace Gazelle {
 
     export interface Artist extends ArtistLite {
 	imageUrl: string,
-	groups: Array<Group>,
+	groups: Array<GroupLite>,
     }
 }
 
@@ -175,6 +176,8 @@ export type BrowseOptions = {
     toYear?: number,
     page?: number,
 }
+
+class GazelleApiError extends Error { };
 
 //** FUNCTIONS
 
@@ -218,12 +221,10 @@ export function codecContentType(codec: Gazelle.Codec): string {
     }
 }
 
-export function songNamePredicate(name: string): string | void {
-    if (/\.(mp3|aac)$/i.test(name)) {
-	return 'audio/mpeg'
-    }
-    if (/\.flac$/i.test(name)) {
-	return 'audio/flac'
+function unescapeArtist(artist) {
+    return {
+	id: artist.id,
+	name: unescape(artist.name)
     }
 }
 
@@ -239,6 +240,7 @@ function parseFileList(wireFileList: string): Gazelle.File[] {
 	    }
 	})
 	.filter(file => songNamePredicate(file.name))
+	.sort((a, b) => songNameComparator(a.name, b.name))
 }
 
 function w2gTorrent(wire: Wire.Torrent): Gazelle.Torrent {
@@ -251,17 +253,17 @@ function w2gTorrent(wire: Wire.Torrent): Gazelle.Torrent {
 	leechers: wire.leechers,
 	media: wire.media,
 	codec: { format: wire.format as any, encoding: wire.encoding as any },
-	files: parseFileList(wire.fileList),	
+	files: parseFileList(wire.fileList),
     }
 }
 
 function parseTorrentGroupResult(wire: Wire.TorrentGroupResult): Gazelle.Group {
     return {
 	id: wire.group.id,
-	name: wire.group.name,
+	name: unescape(wire.group.name),
 	year: wire.group.year,
 	// TODO: handle multiple artists somehow
-	artist: wire.group.musicInfo.artists[0],
+	artist: unescapeArtist(wire.group.musicInfo.artists[0]),
 	imageUrl: wire.group.wikiImage,
 	torrent: torrentSelect(wire.torrents.map(w2gTorrent)),
     }
@@ -272,15 +274,32 @@ function parseBrowseResult(wire: Wire.BrowseResult): Gazelle.GroupLite[] {
     return wire.results.map(wireGroup => {
 	let artist = { name: 'Unknown', id: -1 };
 	try {
-	    artist = wireGroup.torrents[0].artists[0];
+	    artist = unescapeArtist(wireGroup.torrents[0].artists[0]);
 	} catch (e) { }
 	return {
 	    id: wireGroup.groupId,
-	    name: wireGroup.groupName,
+	    name: unescape(wireGroup.groupName),
 	    year: wireGroup.groupYear,
 	    artist,
 	}
     })
+}
+
+function parseArtistResult(wire: Wire.ArtistResult): Gazelle.Artist {
+    return {
+	id: wire.id,
+	name: unescape(wire.name),
+	imageUrl: wire.image,
+	groups: wire.torrentgroup.map(group => ({
+	    id: group.groupId,
+	    name: unescape(group.groupName),
+	    year: group.groupYear,
+	    artist: {
+		id: wire.id,
+		name: unescape(wire.name),
+	    }
+	}))
+    }
 }
 
 async function gazelleApiQuery(action: string, otherProps: object): Promise<object> {
@@ -289,6 +308,9 @@ async function gazelleApiQuery(action: string, otherProps: object): Promise<obje
 	.join('');
     const url =  `${getConfig().gazelle.baseUrl}/ajax.php?action=${action}${props}`;
     debug(`Querying ${url}`)
+    // TODO: keepalive
+    // TODO: retry
+    // TODO: ratelimit delayed retry
     const response: needle.NeedleResponse
 	= await needle('get', url, null,
 		       {
@@ -298,7 +320,7 @@ async function gazelleApiQuery(action: string, otherProps: object): Promise<obje
 	    }
 	});
     if (response.body.status !== 'success') {
-	throw new Error(`Gazelle API returned "status: failure" with message "${response.body.error}"`);
+	throw new GazelleApiError(response.body.error);
     }
 
     return response.body.response;
@@ -347,16 +369,32 @@ export async function groupSearchPaged(opts: BrowseOptions, size: number, offset
     return result;
 }
 
-export async function groupGet(groupId: number): Promise<Gazelle.Group> {
-
-    const response = await gazelleApiQuery('torrentgroup', { id: groupId }) as Wire.TorrentGroupResult;
-    return parseTorrentGroupResult(response);
+// return void if not found
+export async function groupGet(groupId: number): Promise<Gazelle.Group | void> {
+    try {
+	const response = await gazelleApiQuery('torrentgroup', { id: groupId }) as Wire.TorrentGroupResult;
+	return parseTorrentGroupResult(response);
+    } catch (e) {
+	if (e instanceof GazelleApiError && e.message === 'bad id parameter') {
+	    return
+	} else {
+	    throw e
+	}
+    }
 }
 
-// export async function artistGet(gazelleConfig: GazelleConfig, artistId: number) :
-// 				Promise<GazelleArtist> {
-    
-// }
+export async function artistGet(artistId: number): Promise<Gazelle.Artist | void> {
+    try {
+	const response = await gazelleApiQuery('artist', { id: artistId }) as Wire.ArtistResult;
+	return parseArtistResult(response);
+    } catch (e) {
+	if (e instanceof GazelleApiError && e.message === 'bad id parameter') {
+	    return
+	} else {
+	    throw e
+	}
+    }
+}
 
 function torrentCompare(compareBy: TorrentSelectionOrderBy,
 			t1: Gazelle.Torrent,
