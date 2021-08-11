@@ -1,10 +1,12 @@
 import Router from '@koa/router'
 import Koa from 'koa'
 import Joi from 'joi'
+import fs from 'fs'
 
 import { subsonicMiddleware, SubsonicError, SubsonicErrorCode } from './subsonic-middleware.js'
 import { groupGet, groupSearchPaged, songNamePredicate, codecEstimatedBitRate, codecContentType, BrowseOptions, Gazelle } from './gazelle.js'
 import { getTorrentFile, TorrentFileNotFoundError } from './webtorrent.js'
+import getConfig from './config.js'
 
 const allRouter = new Router({ prefix: '/rest' });
 const apiRouter = new Router();
@@ -24,6 +26,9 @@ type SongId = {
     fileIndex: number,
 }
 const songIdSchema = Joi.string().regex(/^song-\d+-\d+-\d+$/)
+
+type CoverId = number
+const coverIdSchema = Joi.string().regex(/^cover-\d+$/)
 
 namespace SubSerial {
 
@@ -243,6 +248,7 @@ async function stream(ctx: Koa.Context) {
     const file = await getTorrentFile(songId.torrentId, songId.fileIndex, songNamePredicate);
     // TODO: somehow use the codic instead?
     const contentType = songNamePredicate(file.name);
+    ctx.response.type = contentType || 'application/octet-stream';
     ctx.response.length = file.length;
     ctx.subsonicResponse = false;
     const stream = file.createReadStream();
@@ -427,11 +433,14 @@ defineEndpoint('search3', search2QuerySchema, async ctx => {
 });
 
 const getCoverArtQuerySchema = Joi.object({
-    id: coverIdSchema,
+    id: coverIdSchema.required(),
+    size: Joi.string(), // TODO
 })
 defineEndpoint('getCoverArt', getCoverArtQuerySchema, async ctx => {
     // TODO: figure out a better way to do cover art
-
+    ctx.response.type = getConfig().subsonic.defaultCoverArtType
+    ctx.response.body = fs.createReadStream(getConfig().subsonic.defaultCoverArt)
+    ctx.subsonicResponse = false;
 })
 
 // yes, these have to go at the bottom

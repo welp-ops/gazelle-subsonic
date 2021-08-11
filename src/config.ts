@@ -22,6 +22,11 @@ namespace Config {
 	preferNewEditions: boolean, // If true, prefer newer torrents, else, prefer older ones.
     }
 
+    interface Subsonic {
+	defaultCoverArt: string,
+	defaultCoverArtType: string,
+    }
+
     interface Server {
 	bindIp: string,
 	port: number,
@@ -30,6 +35,7 @@ namespace Config {
     export type All = {
 	gazelle: Gazelle,
 	torrentSelection: TorrentSelection,
+	subsonic: Subsonic,
 	server: Server,
 	users: Array<{ [key: string]: string }>,
     }

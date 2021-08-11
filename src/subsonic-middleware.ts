@@ -1,7 +1,9 @@
 import Koa from 'koa'
 import Joi from 'joi'
 import { escape } from 'html-escaper'
-import { createHmac } from 'crypto'
+import { createHash } from 'crypto'
+import makeDebug from 'debug'
+
 import getConfig from './config.js'
 
 const serverRestVersion = '1.8.0';
@@ -132,7 +134,10 @@ const singleLetterParamsSchema = Joi.object({
     .and('s', 't')
     .xor('p', 't')
 
+const requestDebug = makeDebug('gazelle-subsonic:subsonic-request')
+const middlewareDebug = makeDebug('gazelle-subsonic:subsonic-middleware')
 export async function subsonicMiddleware(ctx: Koa.Context, next: Koa.Next) {
+    requestDebug(`Subsonic request incoming to ${ctx.request.originalUrl}`)
     ctx.subsonicRequest = {
 	format: SubsonicResponseFormat.Xml,
     }
@@ -167,14 +172,14 @@ export async function subsonicMiddleware(ctx: Koa.Context, next: Koa.Next) {
 	if (query.p) {
 	    let clientPassword: string = query.p as string;
 	    if (clientPassword.indexOf('enc:') === 0) {
-		clientPassword = clientPassword.match(/../g).map(c => String.fromCharCode(parseInt(c, 16))).join('');
+		clientPassword = clientPassword.slice(4).match(/../g).map(c => String.fromCharCode(parseInt(c, 16))).join('');
 	    }
 	    if (serverPassword !== clientPassword) {
 		throw authError;
 	    }
 	} else {
 	    const clientHash = query.t as string;
-	    const serverHash = createHmac('md5', serverPassword + query.s).digest('hex');
+	    const serverHash = createHash('md5').update(serverPassword + query.s).digest('hex');
 	    if (serverHash.toLowerCase() !== clientHash.toLowerCase()) {
 		throw authError;
 	    }
@@ -201,6 +206,7 @@ export async function subsonicMiddleware(ctx: Koa.Context, next: Koa.Next) {
 	    console.error(e)
 	    e = new SubsonicError(e.message, SubsonicErrorCode.Generic);
 	}
+	middlewareDebug(`Error: ${e.message}`)
 	renderError(ctx, e);
     }
 }

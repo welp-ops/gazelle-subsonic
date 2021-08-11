@@ -192,7 +192,7 @@ export function codecEstimatedBitRate(codec: Gazelle.Codec): number {
 	    return 192*1024;
 	default:
 	    if (parseInt(codec.encoding).toString() === codec.encoding) {
-		return parseInt(codec.encoding);
+		return parseInt(codec.encoding) * 1024;
 	    }
 	    // who knows?
 	    debug(`Unable to guesstimate bitrate for encoding ${codec.encoding}`)
@@ -393,9 +393,9 @@ export function torrentSelect(torrents: Array<Gazelle.Torrent>): Gazelle.Torrent
 	.sort((t1, t2) => {
 	    // try each comparison strategy in the order the user wants
 	    for (let i = 0; i < config.sortOrder.length; i++) {
-		const compareResult: boolean | void = torrentCompare(config.sortOrder[i], t1, t2);
-		if (typeof compareResult === 'boolean') {
-		    return compareResult ? 1 : 0;
+		const compareResult: number = torrentCompare(config.sortOrder[i], t1, t2);
+		if (compareResult !== 0) {
+		    return compareResult
 		}
 	    }
 	    // none of the comparisons gave a crap, so they're equal

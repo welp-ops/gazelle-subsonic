@@ -19,6 +19,10 @@
 	"formats": ["MP3 V2", "MP3 V0", "MP3 Other", "MP3 320", "FLAC" ], // in order of preference. If some are unacceptable, remove them from the list.
 	"preferNewEditions": true, // whether to prefer new (eg remasters) or old.
     },
+    "subsonic": {
+	"defaultCoverArt": "gazelle.png",
+	"defaultCoverArtType": "image/png",
+    },
     "server": {
 	"bindIp": "127.0.0.1", // change to 0.0.0.0 if accessing over the network
 	"port": 2773,
