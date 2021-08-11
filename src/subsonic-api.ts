@@ -1,4 +1,5 @@
 import Router from '@koa/router'
+import rangeParser from 'range-parser'
 import Koa from 'koa'
 import Joi from 'joi'
 import fs from 'fs'
@@ -186,7 +187,7 @@ function parseSongsTechnical(codec: Gazelle.Codec, files: Gazelle.File[])
 	    size: file.size,
 	    bitRate: codecEstimatedBitRate(codec),
 	    // round to nearest 30 seconds so it isn't sus
-	    duration: Math.max(30, Math.round(file.size*8 / codecEstimatedBitRate(codec) / 30) * 30),
+	    duration: Math.max(30, Math.round(file.size*8 / codecEstimatedBitRate(codec) / 1024 / 30) * 30),
 	    contentType: codecContentType(codec),
 	    isDir: false,
 	    isVideo: false,
@@ -246,12 +247,30 @@ async function stream(ctx: Koa.Context) {
     const songId = parseSongId(ctx.query.id as string);
 
     const file = await getTorrentFile(songId.torrentId, songId.fileIndex, songNamePredicate);
-    // TODO: somehow use the codic instead?
-    const contentType = songNamePredicate(file.name);
-    ctx.response.type = contentType || 'application/octet-stream';
-    ctx.response.length = file.length;
+    // TODO: somehow use the codec instead?
+    ctx.response.type = songNamePredicate(file.name) || 'application/octet-stream';
+
+    ctx.set('Accept-Ranges', 'bytes')
+
+    let range: { start: number, end: number };
+    if (ctx.get('Range')) {
+	const ranges = rangeParser(file.length, ctx.get('Range'));
+	if (ranges instanceof Array && ranges.length === 1) {
+	    range = ranges[0];
+	}
+    }
+
+    if (range) {
+	console.log('range')
+	ctx.response.status = 206
+	ctx.response.length = range.end - range.start + 1
+	ctx.set('Content-Range', `bytes ${range.start}-${range.end}/${file.length}`)
+    } else {
+	ctx.response.status = 200
+	ctx.response.length = file.length;
+    }
     ctx.subsonicResponse = false;
-    const stream = file.createReadStream();
+    const stream = file.createReadStream(range); // ok if range === undefined
     // HACK
     if (!(file as any).done) {
 	(file as any)._torrent.done = false;
@@ -352,7 +371,7 @@ async function getAlbumList(ctx: Koa.Context): Promise<SubSerial.Album[]> {
 	    opts.orderBy = 'random';
 	    break;
 	case 'newest':
-	    opts.orderBy = 'year';
+	    opts.orderBy = 'time';
 	    break;
 	case 'highest': // TODO: implement rating
 	    opts.orderBy = 'snatched';
@@ -361,7 +380,7 @@ async function getAlbumList(ctx: Koa.Context): Promise<SubSerial.Album[]> {
 	    opts.orderBy = 'seeders';
 	    break;
 	case 'recent':
-	    opts.orderBy = 'time';
+	    opts.orderBy = 'year';
 	    break;
 	case 'starred':
 	    opts.orderBy = 'snatched';

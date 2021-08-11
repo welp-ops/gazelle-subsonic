@@ -181,22 +181,22 @@ export type BrowseOptions = {
 export function codecEstimatedBitRate(codec: Gazelle.Codec): number {
     switch(codec.encoding) {
 	case 'Lossless':
-	    return 950*1024;
+	    return 950;
 	case '24bit Lossless':
-	    return 3000*1024;
+	    return 3000;
 	case 'V0 (VBR)':
-	    return 260*1024;
+	    return 260;
 	case 'V1 (VBR)':
-	    return 225*1024;
+	    return 225;
 	case 'V2 (VBR)':
-	    return 192*1024;
+	    return 192;
 	default:
 	    if (parseInt(codec.encoding).toString() === codec.encoding) {
-		return parseInt(codec.encoding) * 1024;
+		return parseInt(codec.encoding)
 	    }
 	    // who knows?
 	    debug(`Unable to guesstimate bitrate for encoding ${codec.encoding}`)
-	    return 200 * 1024;
+	    return 200
     }
 }
 
@@ -361,23 +361,34 @@ export async function groupGet(groupId: number): Promise<Gazelle.Group> {
 function torrentCompare(compareBy: TorrentSelectionOrderBy,
 			t1: Gazelle.Torrent,
 			t2: Gazelle.Torrent)
-: boolean | void {
+: number {
 
     const config = getConfig().torrentSelection;
     switch (compareBy) {
 	case 'seeders':
-	    if (t1.seeders >= config.seeders) {
-		return false;
+	    if (t1.seeders >= config.seeders && t2.seeders >= config.seeders) {
+		return 0
 	    }
-	    return t1.seeders < t2.seeders;
+	    return t2.seeders - t1.seeders;
 	case 'format':
-	    return config.formats.indexOf(t1.codec.format) < config.formats.indexOf(t2.codec.format);
+	    // TODO: format sorting what about indexOf=-1? together with filtering based on format.
+	    // Also, why not allow filtering based on 24bit lossless?
+	    if (!config.formats.includes(t1.codec.format)) {
+		if (!config.formats.includes(t2.codec.format)) {
+		    return 0
+		}
+		return 1
+	    }
+	    if (!config.formats.includes(t2.codec.format)) {
+		return -1
+	    }
+	    return config.formats.indexOf(t1.codec.format) - config.formats.indexOf(t2.codec.format);
 	case 'year':
 	    return config.preferNewEditions
-		? (t1.year < t2.year)
-		: (t1.year > t2.year);
+		? (t1.year - t2.year)
+		: (t2.year - t1.year);
 	case 'numTracks':
-	    return t1.files.length > t2.files.length;
+	    return t2.files.length - t1.files.length;
     }
 }
 
