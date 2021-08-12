@@ -97,8 +97,8 @@ namespace SubSerial {
 	export type StandaloneAlbumList = { albumList: { album: Album[] }}
 	export type StandaloneAlbumList2 = { albumList2: { album: Album[] }}
 
-	export type StandaloneSearch2 = { search2: SearchResult }
-	export type StandaloneSearch3 = { search3: SearchResult }
+	export type StandaloneSearch2 = { searchResult2: SearchResult }
+	export type StandaloneSearch3 = { searchResult3: SearchResult }
 
 	export type StandaloneMusicFolders = {
 		musicFolders: {
@@ -565,13 +565,13 @@ async function search2(ctx: Koa.Context): Promise<SubSerial.SearchResult> {
 
 defineEndpoint('search2', search2QuerySchema, async ctx => {
 	const response: SubSerial.StandaloneSearch2 = {
-		search2: await search2(ctx),
+		searchResult2: await search2(ctx),
 	}
 	ctx.subsonicResponse = response;
 });
 defineEndpoint('search3', search2QuerySchema, async ctx => {
 	const response: SubSerial.StandaloneSearch3 = {
-		search3: await search2(ctx),
+		searchResult3: await search2(ctx),
 	}
 	ctx.subsonicResponse = response;
 });
