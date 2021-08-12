@@ -30,6 +30,7 @@ namespace Config {
 	interface Server {
 		bindIp: string,
 		port: number,
+		corsOrigins: string | string[] | false,
 	}
 
 	export type All = {

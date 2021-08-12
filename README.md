@@ -24,14 +24,35 @@ You can generate the binaries on the release page by running `npx pkg` (yes, `np
 
 Copy `config.example.js` to `config.js` and have it in the working directory where you run gazelle-subsonic.
 
+## Compatible clients
+
+Legend:
+
+| Symbol  | Meaning                          |
+|---------|----------------------------------|
+| ✔       | Works, perhaps with minor issues |
+| 🟡      | Major issues, not recommended    |
+| ❌      | Doesn't work at all              |
+| (empty) | Not tested                       |
+
+Clients:
+
+| Client        | Status | Platform | Notes                                           |
+|---------------|--------|----------|-------------------------------------------------|
+| DSub          | ✔      | Android  |                                                 |
+| Ultrasonic    | ✔      | Android  |                                                 |
+| Sublime Music | 🟡     | Desktop  | Plays fast and loose with the Subsonic API spec |
+| Clementine    | ❌     | Desktop  | Tries to load the whole catalog at once         |
+| Jamstash      | 🟡      | Web      | Doesn't play songs yet; probably an easy fix    |
+
 ## Subsonic API progress
 
 Legend:
 
 | Symbol  | Meaning                        |
 |---------|--------------------------------|
-| ✓       | Reasonably implemented         |
-| ⃝        | Partially implemented          |
+| ✔       | Reasonably implemented         |
+| 🟡        | Partially implemented          |
 | ❌      | Will not implement, mocked out |
 | (empty) | Unimplemented                  |
 
@@ -39,16 +60,16 @@ Endpoints:
 
 | Endpoint            | Status | Notes                                                                             |
 |---------------------|--------|-----------------------------------------------------------------------------------|
-| `ping`              | ✓      |                                                                                   |
-| `getLicense`        | ✓      |                                                                                   |
-| `getMusicFolders`   | ✓      | Trivial                                                                           |
+| `ping`              | ✔      |                                                                                   |
+| `getLicense`        | ✔      |                                                                                   |
+| `getMusicFolders`   | ✔      | Trivial                                                                           |
 | `getIndexes`        |        | Somehow list popular albums from orpheus?                                         |
-| `getMusicDirectory` | ✓      | Main way to access music                                                          |
+| `getMusicDirectory` | ✔      | Main way to access music                                                          |
 | `getGenres`         |        | List a selection of the most popular tags?                                        |
 | `getArtists`        | ❌     | No paging support, too many artists to list all at once. Maybe random or popular? |
-| `getArtist`         | ✓      | Same as getMusicDirectory, no id3 tags                                            |
-| `getAlbum`          | ✓      | Same as getMusicDirectory, no id3 tags                                            |
-| `getSong`           | ✓      |                                                                                   |
+| `getArtist`         | ✔      | Same as getMusicDirectory, no id3 tags                                            |
+| `getAlbum`          | ✔      | Same as getMusicDirectory, no id3 tags                                            |
+| `getSong`           | ✔      |                                                                                   |
 | `getArtistInfo`     |        |                                                                                   |
 | `getArtistInfo2`    |        |                                                                                   |
 | `getAlbumInfo`      |        |                                                                                   |
@@ -56,23 +77,23 @@ Endpoints:
 | `getSimilarSongs`   |        |                                                                                   |
 | `getSimilarSongs2`  |        |                                                                                   |
 | `getTopSongs`       |        |                                                                                   |
-| `getAlbumList`      | ✓      |                                                                                   |
-| `getAlbumList2`     | ✓      | Same as albumList, no id3 tags                                                    |
+| `getAlbumList`      | ✔      |                                                                                   |
+| `getAlbumList2`     | ✔      | Same as albumList, no id3 tags                                                    |
 | `getRandomSongs`    |        |                                                                                   |
 | `getSongsByGenre`   |        |                                                                                   |
 | `getNowPlaying`     |        |                                                                                   |
 | `getStarred`        |        | Use bookmarks?                                                                    |
 | `getStarred2`       |        |                                                                                   |
 | `search`            | ❌     | Deprecated for a long time.                                                       |
-| `search2`           | ⃝       | Gazelle does not support artist search. Song search needs gazelle api change      |
-| `search3`           | ⃝       | Same as search2, no id3 tags.                                                     |
+| `search2`           | 🟡     | Gazelle does not support artist search. Song search needs gazelle api change      |
+| `search3`           | 🟡     | Same as search2, no id3 tags.                                                     |
 | `getPlaylists`      |        |                                                                                   |
 | `getPlaylist`       |        |                                                                                   |
 | `createPlaylist`    |        |                                                                                   |
 | `updatePlaylist`    |        |                                                                                   |
 | `deletePlaylist`    |        |                                                                                   |
-| `stream`            | ✓      |                                                                                   |
-| `download`          | ✓      | Same as stream for our purposes                                                   |
+| `stream`            | ✔      |                                                                                   |
+| `download`          | 🟡     | Not implemented group download yet                                            |
 | `hls`               |        |                                                                                   |
 | `getCoverArt`       | ❌     | Needs gazelle api change to avoid querying each torrentgroup individually         |
 | `getLyrics`         |        |                                                                                   |

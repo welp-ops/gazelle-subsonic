@@ -47,6 +47,7 @@ namespace SubSerial {
 		isDir: false,
 		coverArt: string,
 		duration: number,
+		track: number,
 		bitRate: number,
 		size: number,
 		contentType: string,
@@ -59,6 +60,8 @@ namespace SubSerial {
 
 	export type Album = {
 		id: string,
+		// in getAlbum and getMusicDirectory, they use name. In search2, they use title. Fuck
+		name: string,
 		title: string,
 		coverArt: string,
 		songCount?: number,
@@ -112,6 +115,7 @@ namespace SubSerial {
 // technical information about a song that can be gotten from just the gazelle songs
 type SerialSongTechnical = {
 	title: string,
+	track: number,
 	suffix: string,
 	isDir: false,
 	isVideo: false,
@@ -198,10 +202,12 @@ function parseSongsTechnical(codec: Gazelle.Codec, files: Gazelle.File[])
 		}
 	}
 
-	return files.map(file => ({
+	return files.map((file, i) => ({
 		technical: {
 			title: pathFileName(file.name).slice(commonPrefix.length),
-			suffix: file.name.slice(file.name.lastIndexOf('.')),
+			track: i+1, // TODO: get it from the common prefix instead? Investigate how existing
+						// servers do this for albums with multiple CDs
+			suffix: file.name.slice(file.name.lastIndexOf('.')).toLowerCase(),
 			size: file.size,
 			bitRate: codecEstimatedBitRate(codec),
 			// round to nearest 30 seconds so it isn't sus
@@ -217,6 +223,7 @@ function parseSongsTechnical(codec: Gazelle.Codec, files: Gazelle.File[])
 function parseGroupLite(group: Gazelle.GroupLite): SubSerial.Album {
 	return {
 		id: serializeGroupId(group.id),
+		name: group.name,
 		title: group.name,
 		coverArt: serializeCoverId(group.id),
 		artist: group.artist.name,
@@ -255,6 +262,29 @@ defineEndpoint('getLicense', emptySchema, ctx => ctx.subsonicResponse = {
 	email: 'welp@orpheus.network',
 	licenseExpires: new Date('2100').toISOString(),
 });
+
+const getUserQuerySchema = Joi.object({
+	username: Joi.string().required(),
+})
+defineEndpoint('getUser', getUserQuerySchema, async ctx => ctx.subsonicResponse = {
+	user: {
+		username: ctx.query.username,
+		email: 'welp@orpheus.network',
+		scrobblingEnabled: false,
+		adminRole: false,
+		settingsRole: false,
+		downloadRole: true,
+		uploadRole: false,
+		playlistRole: false,
+		coverArtRole: true,
+		commentRole: false,
+		podcastRole: false,
+		streamRole: true,
+		jukeboxRole: false,
+		shareRole: false,
+		// doing the folder is too annoying
+	}
+})
 
 const streamQuerySchema = Joi.object({
 	id: songIdSchema.required(),
@@ -296,6 +326,7 @@ async function stream(ctx: Koa.Context) {
 }
 
 defineEndpoint('stream', streamQuerySchema, stream);
+// TODO: download group
 defineEndpoint('download', streamQuerySchema, stream);
 
 async function getAlbum(id: GroupId): Promise<{ album: SubSerial.Album, songs: SubSerial.Song[]}> {
@@ -310,6 +341,7 @@ async function getAlbum(id: GroupId): Promise<{ album: SubSerial.Album, songs: S
 	return {
 		album: {
 			id: groupId,
+			name: group.name,
 			title: group.name,
 			coverArt: coverId,
 			songCount: group.torrent.files.length,
@@ -382,6 +414,7 @@ async function getArtist(id: ArtistId): Promise<{ artist: SubSerial.Artist, albu
 		},
 		albums: artist.groups.map(group => ({
 			id: serializeGroupId(group.id),
+			name: group.name,
 			title: group.name,
 			coverArt: 'TODO',
 			artist: artist.name,
@@ -567,6 +600,22 @@ defineEndpoint('getMusicFolders', emptySchema, async ctx => {
 
 	}
 	ctx.subsonicResponse = response
+})
+
+defineEndpoint('getPlaylists', emptySchema, async ctx => {
+	ctx.subsonicResponse = { playlists: {} }
+})
+
+defineEndpoint('getIndexes', emptySchema, async ctx => {
+	ctx.subsonicResponse = { indexes: {} }
+})
+
+defineEndpoint('getGenres', emptySchema, async ctx => {
+	ctx.subsonicResponse = { genres: {} }
+})
+
+defineEndpoint('getPodcasts', emptySchema, async ctx => {
+	ctx.subsonicResponse = { podcasts: {} }
 })
 
 // yes, these have to go at the bottom

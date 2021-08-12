@@ -26,6 +26,8 @@
     "server": {
 	"bindIp": "127.0.0.1", // change to 0.0.0.0 if accessing over the network
 	"port": 2773,
+	"corsOrigins": false, // either "*", an array of strings of acceptable origins (eg
+	                      // ["http://jamstash.com"]), or false to disable CORS
     },
     "users": {
 	"welp": "password"

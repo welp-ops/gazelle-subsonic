@@ -124,8 +124,8 @@ function renderOk(ctx: Koa.Context): void {
 
 const singleLetterParamsSchema = Joi.object({
 	f: Joi.string().equal('xml', 'json', 'jsonp'),
-	v: Joi.string().regex(/\d+\.\d+\.\d+/).required(),
-	c: Joi.string().required(),
+	v: Joi.string().regex(/\d+\.\d+\.\d+/),
+	c: Joi.string(),
 	u: Joi.string().required(),
 	p: Joi.string(),
 	t: Joi.string().regex(/^[a-fA-F0-9]{32}$/),
