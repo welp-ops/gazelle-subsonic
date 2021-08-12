@@ -1,4 +1,6 @@
 /lib
+/dist/*
+!/dist/.gitkeep
 /package-lock.json
 /node_modules
 *.js
