@@ -18,7 +18,7 @@ command line to run them.
 5. Run `npm run build` to compile the typescript to javascript.
 6. Run `npm start` and gazelle-subsonic will be online!
 
-You can generate the binaries on the release page by running `npx pkg` (yes, `npx`, not `npm`)
+To generate the portable binaries yourself, execute `npm run package`
 
 ## Configuration
 

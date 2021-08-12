@@ -50,7 +50,7 @@ let config: Config.All;
 // synchronously read config from disk, or return it if already read.
 export default function getConfig(): Config.All {
 	try {
-		config = config || eval(readFileSync('./config.js', { encoding: 'utf-8' })) as Config.All;
+		config = config || (0,eval)(readFileSync('./config.js', { encoding: 'utf-8' })) as Config.All;
 	} catch (e) {
 		console.error('Error reading or parsing configuration.')
 		throw e;

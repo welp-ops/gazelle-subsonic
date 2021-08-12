@@ -6,6 +6,7 @@
     "type": "module",
     "scripts": {
         "build": "tsc -t ES2017 --esModuleInterop --moduleResolution node --outDir lib src/*.ts",
+	"package": "esbuild --bundle --platform=node --outfile=gazelle-subsonic.js lib/index.js && pkg -t node14-linux,node14-mac,node14-win --public --public-packages='*' gazelle-subsonic.js",
         "start": "node lib/index.js"
     },
     "author": "Welp Wazowski",
@@ -25,6 +26,8 @@
         "@types/koa": "^2.13.4",
         "@types/needle": "^2.5.2",
         "@types/webtorrent": "^0.109.1",
+        "esbuild": "^0.12.19",
+        "pkg": "^5.3.1",
         "typescript": "^4.3.5"
     }
 }

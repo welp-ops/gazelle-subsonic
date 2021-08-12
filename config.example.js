@@ -3,7 +3,7 @@
     "gazelle": {
 	"baseUrl": "https://orpheus.network", // no trailing slash
 	"authToken": "abcdefghijklmnovqrstuvwxyz1234567890", // generate an API token from user settings
-	"passkey": "abcdefghijklmnovqrstuvwxyz1234567890", // look in your download link URLs for this
+	"passkey": "abcdefghijklmnovqrstuvwxyz1234567890", // look in user settings
 	"searchPageSize": 50,
     },
     // how to choose which torrent to leech from a group
@@ -13,14 +13,14 @@
 	// numTracks maximizes the number of tracks in the torrent, for example, to prefer torrents
 	// with bonus tracks.
 
-	"seeders": 6, // If set to a number, all torrents with at least this many seeders are
+	"seeders": 3, // If set to a number, all torrents with at least this many seeders are
 			 // given high priority and considered equivalent, and the remaining torrents are sorted. Alternatively, set to
 			 // `true` to sort strictly by seeders.
-	"formats": ["MP3 V2", "MP3 V0", "MP3 Other", "MP3 320", "FLAC" ], // in order of preference. If some are unacceptable, remove them from the list.
+	"formats": ["MP3", "FLAC", "AAC" ], // in order of preference.
 	"preferNewEditions": true, // whether to prefer new (eg remasters) or old.
     },
     "subsonic": {
-	"defaultCoverArt": "gazelle.png",
+	"defaultCoverArt": "./gazelle.png",
 	"defaultCoverArtType": "image/png",
     },
     "server": {
