@@ -1,5 +1,5 @@
 import needle from 'needle';
-import { unescape } from 'html-escaper'
+import { decode } from 'html-entities'
 import makeDebug from 'debug'
 const debug = makeDebug('gazelle-subsonic:gazelle-api')
 
@@ -180,6 +180,10 @@ export type BrowseOptions = {
 class GazelleApiError extends Error { };
 
 //** FUNCTIONS
+
+function unescape(arg: string): string {
+	return decode(arg, { scope: 'strict' })
+} 
 
 export function codecEstimatedBitRate(codec: Gazelle.Codec): number {
 	switch(codec.encoding) {

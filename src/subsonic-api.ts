@@ -207,7 +207,7 @@ function parseSongsTechnical(codec: Gazelle.Codec, files: Gazelle.File[])
 			title: pathFileName(file.name).slice(commonPrefix.length),
 			track: i+1, // TODO: get it from the common prefix instead? Investigate how existing
 						// servers do this for albums with multiple CDs
-			suffix: file.name.slice(file.name.lastIndexOf('.')).toLowerCase(),
+			suffix: file.name.slice(file.name.lastIndexOf('.')+1).toLowerCase(),
 			size: file.size,
 			bitRate: codecEstimatedBitRate(codec),
 			// round to nearest 30 seconds so it isn't sus

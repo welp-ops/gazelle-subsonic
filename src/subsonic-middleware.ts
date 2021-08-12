@@ -1,6 +1,6 @@
 import Koa from 'koa'
 import Joi from 'joi'
-import { escape } from 'html-escaper'
+import { encode } from 'html-entities'
 import { createHash } from 'crypto'
 import makeDebug from 'debug'
 
@@ -18,10 +18,7 @@ export enum SubsonicErrorCode {
 	NotFound = 70,
 }
 
-enum SubsonicResponseFormat {
-	Xml,
-	Json,
-}
+type SubsonicResponseFormat = { format: 'xml' } | { format: 'json' } | { format: 'jsonp', callback: string }
 
 export class SubsonicError extends Error {
 	code: SubsonicErrorCode;
@@ -56,7 +53,7 @@ function renderXml(body: object): string {
 
 		const attrsString: string = Object.keys(attrs).map(key => {
 			const value = attrs[key];
-			return `${key}="${escape(value)}"`;
+			return `${key}="${encode(value, { level: 'xml' })}"`;
 		}).join(' ');
 
 		if (children.length === 0 && rootName) {
@@ -76,15 +73,23 @@ ${childrenString}
 }
 
 function renderResponse(ctx: Koa.Context, body: object): void {
-	switch (ctx.subsonicRequest.format) {
-		case SubsonicResponseFormat.Xml:
+	switch (ctx.query.f) {
+		case 'xml':
+		case undefined:
 			ctx.response.type = 'xml'
 			ctx.response.body = renderXml(body);
 			break;
-		case SubsonicResponseFormat.Json:
+		case 'json':
 			ctx.response.type = 'json'
 			ctx.response.body = JSON.stringify(body)
 			break;
+		case 'jsonp':
+			if (!ctx.query.callback || ctx.query.callback instanceof Array) {
+				throw new SubsonicError('callback parameter required', SubsonicErrorCode.RequiredParameterMissing)
+			}
+			ctx.response.type = 'application/javascript'
+			ctx.response.body = `${ctx.query.callback}(${JSON.stringify(body)})`
+			break
 	}
 }
 
@@ -124,6 +129,8 @@ function renderOk(ctx: Koa.Context): void {
 
 const singleLetterParamsSchema = Joi.object({
 	f: Joi.string().equal('xml', 'json', 'jsonp'),
+	callback: Joi.string(), // no require at the Joi level because for images and streams some
+							// clients still provide f=jsonp
 	v: Joi.string().regex(/\d+\.\d+\.\d+/),
 	c: Joi.string(),
 	u: Joi.string().required(),
@@ -139,7 +146,7 @@ const middlewareDebug = makeDebug('gazelle-subsonic:subsonic-middleware')
 export async function subsonicMiddleware(ctx: Koa.Context, next: Koa.Next) {
 	requestDebug(`Subsonic request incoming to ${ctx.request.originalUrl}`)
 	ctx.subsonicRequest = {
-		format: SubsonicResponseFormat.Xml,
+		format: { format: 'xml' }
 	}
 
 	try {
@@ -147,18 +154,6 @@ export async function subsonicMiddleware(ctx: Koa.Context, next: Koa.Next) {
 		const validateError = singleLetterParamsSchema.validate(query, { allowUnknown: true }).error;
 		if (validateError) {
 			throw new SubsonicError(validateError.message, SubsonicErrorCode.RequiredParameterMissing)
-		}
-		switch (query.f) {
-			case 'xml':
-				ctx.subsonicRequest.format = SubsonicResponseFormat.Xml;
-				break;
-			case 'json':
-				ctx.subsonicRequest.format = SubsonicResponseFormat.Json;
-				break;
-			case undefined:
-				break;
-			default:
-				throw new SubsonicError('Unknown/unsupported format', SubsonicErrorCode.Generic);
 		}
 		ctx.subsonicRequest.version = query.v;
 		ctx.subsonicRequest.client = query.c

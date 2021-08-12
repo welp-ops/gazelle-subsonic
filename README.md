@@ -43,7 +43,7 @@ Clients:
 | Ultrasonic    | ✔      | Android  |                                                 |
 | Sublime Music | 🟡     | Desktop  | Plays fast and loose with the Subsonic API spec |
 | Clementine    | ❌     | Desktop  | Tries to load the whole catalog at once         |
-| Jamstash      | 🟡      | Web      | Doesn't play songs yet; probably an easy fix    |
+| Jamstash      | ✔      | Web      |                                                 |
 
 ## Subsonic API progress
 
